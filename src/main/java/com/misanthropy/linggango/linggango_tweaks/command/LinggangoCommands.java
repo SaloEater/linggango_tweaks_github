@@ -2,6 +2,13 @@ package com.misanthropy.linggango.linggango_tweaks.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.FloatArgumentType;
+import dev.firstdark.rpc.DiscordRpc;
+import dev.firstdark.rpc.enums.ActivityType;
+import dev.firstdark.rpc.enums.ErrorCode;
+import dev.firstdark.rpc.exceptions.UnsupportedOsType;
+import dev.firstdark.rpc.handlers.RPCEventHandler;
+import dev.firstdark.rpc.models.DiscordRichPresence;
+import dev.firstdark.rpc.models.User;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.DimensionArgument;
@@ -29,13 +36,60 @@ import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Mod.EventBusSubscriber
 public class LinggangoCommands {
+    static DiscordRpc rpc = new DiscordRpc();
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> d = event.getDispatcher();
+        rpc.setDebugMode(true);
+
+        RPCEventHandler handler = new RPCEventHandler() {
+            @Override
+            public void ready(User user) {
+                System.out.println("Ready");
+                DiscordRichPresence presence = DiscordRichPresence.builder()
+                        .details("Hello World")
+                        .largeImageKey("additionslogo")
+                        .activityType(ActivityType.PLAYING)
+                        .button(DiscordRichPresence.RPCButton.of("Test", "https://google.com"))
+                        .build();
+
+                rpc.updatePresence(presence);
+                System.out.println(user.getUsername());
+            }
+
+            @Override
+            public void disconnected(ErrorCode errorCode, String message) {
+                System.out.println("Disconnected " + errorCode + " - " + message);
+            }
+
+            @Override
+            public void errored(ErrorCode errorCode, String message) {
+                System.out.println("Errored " + errorCode + " - " + message);
+            }
+        };
+
+        try {
+            rpc.init("1495930821994086532", handler, false);
+        } catch (UnsupportedOsType e) {
+            throw new RuntimeException(e);
+        }
+
+        d.register(Commands.literal("dsc").executes(c -> {
+            DiscordRichPresence presence = DiscordRichPresence.builder()
+                    .details("Random line: " + UUID.randomUUID())
+                    .largeImageKey("additionslogo")
+                    .activityType(ActivityType.PLAYING)
+                    .button(DiscordRichPresence.RPCButton.of("Test", "https://google.com"))
+                    .build();
+
+            rpc.updatePresence(presence);
+            return 0;
+        }));
 
         d.register(Commands.literal("gm1").requires(s -> s.hasPermission(2)).executes(c -> setGameMode(c.getSource(), GameType.SURVIVAL)));
         d.register(Commands.literal("gm3").requires(s -> s.hasPermission(2)).executes(c -> setGameMode(c.getSource(), GameType.CREATIVE)));

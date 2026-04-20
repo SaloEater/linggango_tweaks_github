@@ -13,6 +13,7 @@ plugins {
     id 'eclipse'
     id 'idea'
     id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 apply plugin: 'org.spongepowered.mixin'
@@ -26,6 +27,10 @@ base {
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+configurations {
+    shadow
 }
 
 minecraft {
@@ -42,6 +47,12 @@ minecraft {
             property 'forge.logging.markers', 'REGISTRIES'
 
             property 'forge.logging.console.level', 'debug'
+
+            // add shadow dependencies to run classpath
+            lazyToken('minecraft_classpath') {
+                configurations.shadow.copyRecursive().resolve()
+                        .collect { it.absolutePath }.join(File.pathSeparator)
+            }
 
             mods {
                 "${mod_id}" {
@@ -94,11 +105,18 @@ repositories {
             includeGroup "curse.maven"
         }
     }
+    maven {
+        name "FDD Maven"
+        url "https://maven.firstdark.dev/releases"
+    }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'
+    compileOnly "dev.firstdark.discordrpc:discord-rpc:1.0.4"
+    shadow "dev.firstdark.discordrpc:discord-rpc:1.0.4"
+
     compileOnly fg.deobf("curse.maven:traveloptics-1046916:7424522")
     compileOnly fg.deobf("blank:betterchunkloading:1.20.1-5.4")
     compileOnly fg.deobf("blank:EnigmaticLegacy:2.30.1")
@@ -154,6 +172,14 @@ dependencies {
 
 }
 
+shadowJar {
+    archiveClassifier.set('all')
+    configurations = [project.configurations.shadow]
+    mergeServiceFiles()
+    // don't minimize (can strip required classes)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [minecraft_version   : minecraft_version, minecraft_version_range: minecraft_version_range,
                              forge_version       : forge_version, forge_version_range: forge_version_range,
@@ -169,6 +195,12 @@ tasks.named('processResources', ProcessResources).configure {
 }
 
 tasks.named('jar', Jar).configure {
+    dependsOn tasks.named('shadowJar')
+    from({ zipTree(tasks.named('shadowJar').get().archiveFile.get().asFile) }) {
+        exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
     manifest {
         attributes([
                 "Specification-Title"     : mod_id,
